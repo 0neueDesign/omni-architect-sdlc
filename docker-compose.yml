@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------
+  # LAYER 1: Source Control (Gitea)
+  # ---------------------------------------------------------
+  gitea:
+    image: gitea/gitea:1.21.0
+    container_name: omni-gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    restart: always
+    ports:
+      - "3000:3000"
+      - "222:22"
+    volumes:
+      - ./data/gitea:/data
+
+  # ---------------------------------------------------------
+  # LAYER 2: Verification Loop (Woodpecker CI)
+  # ---------------------------------------------------------
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:v2.3.0
+    container_name: omni-woodpecker-server
+    environment:
+      - WOODPECKER_OPEN=true
+      - WOODPECKER_HOST=http://woodpecker-server:8000
+      - WOODPECKER_GITEA=true
+      - WOODPECKER_GITEA_URL=http://gitea:3000
+      - WOODPECKER_AGENT_SECRET=omni_architect_secret_key
+    ports:
+      - "8008:8000"
+    volumes:
+      - ./data/woodpecker-server:/var/lib/woodpecker
+    depends_on:
+      - gitea
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:v2.3.0
+    container_name: omni-woodpecker-agent
+    environment:
+      - WOODPECKER_SERVER=woodpecker-server:9000
+      - WOODPECKER_AGENT_SECRET=omni_architect_secret_key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - woodpecker-server
+
+  # ---------------------------------------------------------
+  # LAYER 3: Nervous System (n8n Event Router)
+  # ---------------------------------------------------------
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: omni-n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+
+  # ---------------------------------------------------------
+  # LAYER 4: Epistemic Graph Memory (Neo4j & ChromaDB)
+  # ---------------------------------------------------------
+  neo4j:
+    image: neo4j:5.15.0
+    container_name: omni-neo4j
+    restart: always
+    environment:
+      - NEO4J_AUTH=neo4j/omnipassword123
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - ./data/neo4j/data:/data
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: omni-chromadb
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/chromadb:/chroma/chroma

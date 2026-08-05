@@ -1,0 +1,10 @@
+# LangGraph Orchestrator Dependencies
+langchain-core>=0.1.30
+langgraph>=0.0.26
+langchain-openai>=0.0.8 # For OpenRouter compatibility
+pydantic>=2.0
+neo4j>=5.15.0 # For Graph Memory
+chromadb>=0.4.22 # For Vector Memory
+uvicorn>=0.27.0
+fastapi>=0.109.0
+python-dotenv>=1.0.1
