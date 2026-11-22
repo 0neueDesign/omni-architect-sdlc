@@ -43,16 +43,4 @@ impl Ledger {
         )?;
         Ok(())
     }
-
-    pub fn get(&self, ticket_id: &str) -> Result<Option<(String, String)>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT swarm, ci_status FROM decisions WHERE ticket_id = ?1")?;
-        let mut rows = stmt.query(params![ticket_id])?;
-        if let Some(row) = rows.next()? {
-            Ok(Some((row.get(0)?, row.get(1)?)))
-        } else {
-            Ok(None)
-        }
-    }
 }

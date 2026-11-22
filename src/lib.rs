@@ -240,8 +240,7 @@ pub struct BenchMetrics {
 }
 
 pub fn bench_metrics(config: &Config, iters: u32) -> Result<BenchMetrics> {
-    let mut app_config = config.clone();
-    app_config.db_path = config.db_path.clone();
+    let app_config = config.clone();
     if app_config.verify_program.is_empty() {
         bail!("bench requires OMNI_VERIFY_PROGRAM so the timed path is a real command");
     }
