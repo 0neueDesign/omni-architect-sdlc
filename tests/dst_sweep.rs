@@ -4,7 +4,10 @@ use std::process::Command;
 fn forge_dst_seed_sweep_stays_local() {
     let exe = env!("CARGO_BIN_EXE_omni-architect");
     let before = tcp_lines();
-    for seed in 0..16u32 {
+    // Kickoff requires FORGE_DST_SEED=0..32. The Termux sweep stopped at 16.
+    // The fault table is `seed % 6`, so 0..32 covers the same faults more than once
+    // and still must open zero sockets.
+    for seed in 0..32u32 {
         let out = Command::new(exe)
             .env("FORGE_DST_SEED", seed.to_string())
             .env("OPENROUTER_API_KEY", "dst-not-a-secret")
@@ -47,6 +50,23 @@ fn forge_dst_seed_sweep_stays_local() {
 }
 
 fn tcp_lines() -> usize {
+    if cfg!(windows) {
+        // `netstat -ano` lists every TCP row on the machine. Only rows owned
+        // by this process count. A host-wide delta is other software, not a socket
+        // opened by the router.
+        let pid = std::process::id().to_string();
+        let Ok(out) = std::process::Command::new("netstat")
+            .args(["-ano", "-p", "tcp"])
+            .output()
+        else {
+            return 0;
+        };
+        let text = String::from_utf8_lossy(&out.stdout);
+        return text
+            .lines()
+            .filter(|line| line.contains("TCP") && line.split_whitespace().last() == Some(pid.as_str()))
+            .count();
+    }
     let text = std::fs::read_to_string("/proc/self/net/tcp").unwrap_or_default();
     text.lines()
         .skip(1)

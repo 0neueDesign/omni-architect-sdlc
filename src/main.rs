@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(unix)]
 use std::thread;
 
 #[derive(Parser)]
@@ -37,6 +38,9 @@ enum Cmd {
     Verify {
         #[arg(long)]
         program: Option<String>,
+        /// Arguments for the verifier program. Repeat the flag.
+        #[arg(long)]
+        arg: Vec<String>,
     },
     /// Admit one ticket.
     Admit { id: String, text: String },
@@ -46,6 +50,11 @@ enum Cmd {
         iters: u32,
         #[arg(long)]
         program: Option<String>,
+        /// Arguments for `--program`. Repeat the flag. Required on Windows
+        /// when the program is `cmd`, because `cmd` with no args exits 0
+        /// without proving a verifier command.
+        #[arg(long)]
+        arg: Vec<String>,
     },
     /// Print the parsed FORGE_DST_SEED, or `none`.
     DstSeed,
@@ -66,7 +75,7 @@ fn main() -> Result<()> {
         Cmd::Route { intent } => {
             println!("{}", omni_architect::route_swarm(&intent));
         }
-        Cmd::Verify { program } => {
+        Cmd::Verify { program, arg } => {
             let program = match program {
                 Some(program) if !program.is_empty() => program,
                 _ => config.verify_program.clone(),
@@ -74,8 +83,9 @@ fn main() -> Result<()> {
             if program.is_empty() {
                 anyhow::bail!("verifier program is unset");
             }
+            let args = if arg.is_empty() { config.verify_args.clone() } else { arg };
             let report =
-                omni_architect::run_command(&program, &config.verify_args, config.verify_timeout)?;
+                omni_architect::run_command(&program, &args, config.verify_timeout)?;
             println!("{}", serde_json::to_string(&report)?);
             if report.status == omni_architect::CiStatus::Fail {
                 std::process::exit(1);
@@ -89,10 +99,13 @@ fn main() -> Result<()> {
             let decision = app.admit(&id, &text)?;
             println!("{}", serde_json::to_string(&decision)?);
         }
-        Cmd::Bench { iters, program } => {
+        Cmd::Bench { iters, program, arg } => {
             let mut config = config;
             if let Some(program) = program.filter(|p| !p.is_empty()) {
                 config.verify_program = program;
+            }
+            if !arg.is_empty() {
+                config.verify_args = arg;
             }
             let report = omni_architect::bench_metrics(&config, iters)?;
             println!("{}", serde_json::to_string(&report)?);
@@ -158,14 +171,26 @@ struct DstOut {
 }
 
 fn install_signals(stop: Arc<AtomicBool>) -> Result<()> {
-    let mut signals = signal_hook::iterator::Signals::new([
-        signal_hook::consts::SIGTERM,
-        signal_hook::consts::SIGINT,
-    ])?;
-    thread::spawn(move || {
-        for _sig in &mut signals {
+    // Unix keeps the signal-hook iterator so SIGTERM stops admission.
+    // Windows has no SIGTERM iterator in that crate; ctrlc covers Ctrl+C
+    // and Ctrl-Break, which is the console equivalent of stopping admission.
+    #[cfg(unix)]
+    {
+        let mut signals = signal_hook::iterator::Signals::new([
+            signal_hook::consts::SIGTERM,
+            signal_hook::consts::SIGINT,
+        ])?;
+        thread::spawn(move || {
+            for _sig in &mut signals {
+                stop.store(true, Ordering::Relaxed);
+            }
+        });
+    }
+    #[cfg(windows)]
+    {
+        ctrlc::set_handler(move || {
             stop.store(true, Ordering::Relaxed);
-        }
-    });
+        })?;
+    }
     Ok(())
 }

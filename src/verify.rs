@@ -1,3 +1,4 @@
+use crate::host::{false_args, false_program, true_args, true_program};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::process::{Command, Stdio};
@@ -89,12 +90,12 @@ pub fn fault_for_seed(seed: u32) -> &'static str {
 }
 
 /// Local verifier faults for `FORGE_DST_SEED`. Does not open a socket.
-/// `ok` and `nonzero` spawn `/bin/true` and `/bin/false`. Other faults are injected
+/// `ok` and `nonzero` spawn a host exit-0 / exit-1 command. Other faults are injected
 /// at this seam so the sweep does not sleep through 16 real timeouts.
 pub fn run_dst_seed(seed: u32) -> Result<VerifyReport> {
     match fault_for_seed(seed) {
         "timeout" => Ok(injected("timeout", 1, "timeout")),
-        "nonzero" => run_command("/bin/false", &[], Duration::from_secs(2)),
+        "nonzero" => run_command(&false_program(), &false_args(), Duration::from_secs(2)),
         "dropped" => Ok(injected("dropped", 1, "dropped connection")),
         "malformed" => Ok(injected("malformed", 1, "malformed payload")),
         "retry" => {
@@ -105,7 +106,7 @@ pub fn run_dst_seed(seed: u32) -> Result<VerifyReport> {
             }
             Ok(injected("retry", attempts, "bounded retry exhausted"))
         }
-        _ => run_command("/bin/true", &[], Duration::from_secs(2)),
+        _ => run_command(&true_program(), &true_args(), Duration::from_secs(2)),
     }
 }
 
@@ -127,10 +128,20 @@ mod tests {
 
     #[test]
     fn exit_zero_is_pass_and_exit_one_is_fail() {
-        let ok = run_command("/bin/true", &[], Duration::from_secs(2)).expect("true");
+        let ok = run_command(
+            &crate::host::true_program(),
+            &crate::host::true_args(),
+            Duration::from_secs(2),
+        )
+        .expect("true");
         assert_eq!(ok.status, CiStatus::Pass);
         assert_eq!(ok.sockets_opened, 0);
-        let bad = run_command("/bin/false", &[], Duration::from_secs(2)).expect("false");
+        let bad = run_command(
+            &crate::host::false_program(),
+            &crate::host::false_args(),
+            Duration::from_secs(2),
+        )
+        .expect("false");
         assert_eq!(bad.status, CiStatus::Fail);
         assert_ne!(bad.exit_code, Some(0));
         assert_eq!(bad.sockets_opened, 0);
@@ -138,8 +149,12 @@ mod tests {
 
     #[test]
     fn timeout_is_fail_and_does_not_open_a_socket() {
-        let got = run_command("/bin/sleep", &["2".to_string()], Duration::from_millis(40))
-            .expect("sleep");
+        let got = run_command(
+            &crate::host::sleep_program(),
+            &crate::host::sleep_args("2"),
+            Duration::from_millis(40),
+        )
+        .expect("sleep");
         assert_eq!(got.status, CiStatus::Fail);
         assert_eq!(got.fault, "timeout");
         assert_eq!(got.sockets_opened, 0);

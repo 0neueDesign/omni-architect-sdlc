@@ -4,7 +4,7 @@
 
 | Seam | Choice | Kept? | Why |
 |---|---|---|---|
-| Ledger | `rusqlite` 0.32, MIT, bundled SQLite | yes | Architecture already rejects Neo4j for five strings. A custom file ledger would reimplement a transaction. Not measured against a second implementation. |
+| Ledger | `rusqlite` 0.41.1, MIT, bundled SQLite 3.54.1 | yes | Replaced 0.32.1 after `cargo deny` reported `RUSTSEC-2026-0459` on the bundled SQLite. 0.41.1 clears `cargo deny check advisories` and `cargo deny check licenses`. Tests stayed at 13. Not a p99 win. |
 | Verifier | local `std::process::Command` | yes | `reqwest` / `tonic` would open sockets. ADR 0006. No DST result authorizes a remote client. |
 | Route | the table in `src/route.rs` | yes | No parser crate. The function is smaller than a dependency. |
 | Hash, ring, compression, crypto | none | n/a | This binary has no such seam. |

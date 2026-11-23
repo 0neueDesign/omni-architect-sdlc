@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+pub mod host;
 pub mod ledger;
 pub mod route;
 pub mod sanitize;
@@ -63,10 +64,13 @@ impl Config {
             .or_else(|| std::env::var("OMNI_DB").ok().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("omni.db"));
         let mut config = Self::resolve(cli_key, env_key.as_deref(), file_key.as_deref(), db_path)?;
-        if let Ok(program) = std::env::var("OMNI_VERIFY_PROGRAM")
-            && !program.is_empty()
-        {
-            config.verify_program = program;
+        if let Ok(program) = std::env::var("OMNI_VERIFY_PROGRAM") {
+            if !program.is_empty() {
+                config.verify_program = program;
+                if let Ok(args) = std::env::var("OMNI_VERIFY_ARGS") {
+                    config.verify_args = split_verify_args(&args);
+                }
+            }
         }
         Ok(config)
     }
@@ -74,6 +78,19 @@ impl Config {
     pub fn has_key(&self) -> bool {
         !self.api_key.is_empty()
     }
+}
+
+/// Split `OMNI_VERIFY_ARGS` on ASCII unit separator, then on spaces.
+/// A caller that needs a space inside one argument uses `\x1f`.
+fn split_verify_args(raw: &str) -> Vec<String> {
+    if raw.contains('\u{1f}') {
+        return raw
+            .split('\u{1f}')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
+    raw.split_whitespace().map(str::to_string).collect()
 }
 
 /// Precedence, low to high: empty (invalid), file, environment, CLI.
@@ -297,21 +314,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 fn peak_rss_kb() -> u64 {
-    let Ok(text) = fs::read_to_string("/proc/self/status") else {
-        return 0;
-    };
-    for line in text.lines() {
-        let Some(rest) = line.strip_prefix("VmHWM:") else {
-            continue;
-        };
-        let Some(raw) = rest.split_whitespace().next() else {
-            continue;
-        };
-        if let Ok(value) = raw.parse() {
-            return value;
-        }
-    }
-    0
+    crate::host::peak_rss_kb()
 }
 
 fn binary_kb() -> u64 {
@@ -434,7 +437,8 @@ mod tests {
         );
 
         let mut config = Config::resolve(Some("test-key"), None, None, db).expect("config");
-        config.verify_program = "/bin/false".to_string();
+        config.verify_program = crate::host::false_program();
+        config.verify_args = crate::host::false_args();
         let mut app = App::open(config).expect("open");
         let decision = app.admit("t3", "terraform plan").expect("admit");
         assert_eq!(decision.swarm.as_deref(), Some("finops"));

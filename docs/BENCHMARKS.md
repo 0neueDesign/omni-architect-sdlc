@@ -40,9 +40,24 @@ S2 seats were claimed with `forge-harness worktree-claim` and executed with `for
 
 codex, kimi, antigravity, goose, and zeroclaw are `available: false` and were not launched.
 
+## Windows parity (2026-11-23)
+
+Host: Windows 11, AMD Ryzen 5 5600G, 6 physical / 12 logical. Pinned with `forge-harness bench --affinity 0x0F` after a 10-iteration warmup. The timed loop is the same `admit` of `fix mobile login`, but the verifier is `cmd /c exit 0` because `/bin/true` does not exist here. `hotpath_allocs` is still the three instrumented sites, not a dhat count.
+
+| Run | p50_ns | p99_ns | throughput_ops | peak_rss_kb | binary_kb | crates | unsafe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| pinned 1 | 29626300 | 49965900 | 31.14 | 8184 | 2540 | 58 | 0 |
+| pinned 2 | 28578400 | 54469400 | 31.25 | 8180 | 2540 | 58 | 0 |
+
+The p99 band is about 9%. That is larger than the 2% Git-Ratchet keep bar, so no poll-interval change was kept. RSS is `tasklist` working set in KB. The earlier 188 and 8 KB readings were a CSV parse bug and are not quoted.
+
+`rusqlite` moved from 0.32.1 to 0.41.1. `cargo deny check advisories` failed on `libsqlite3-sys` 0.30.1 (`RUSTSEC-2026-0459`, bundled SQLite before 3.54.0) and passes on 0.39.1. That is an OSS swap kept because the advisory cleared and the 13 tests still pass, not because p99 improved.
+
+DST is now `FORGE_DST_SEED=0..32`. The socket check counts TCP rows owned by the test process. A host-wide `netstat` delta is other software and was rejected as a false failure.
+
 ## OSS swaps
 
-None measured as a swap. `rusqlite` is the ledger, as specified. No HTTP client. See `.forge/OSS_SWAP.md`.
+`rusqlite` 0.41.1 replaced 0.32.1. See above. No HTTP client. See `.forge/OSS_SWAP.md`.
 
 ## Tests
 
