@@ -243,7 +243,13 @@ impl App {
 pub struct BenchMetrics {
     pub p50_ns: f64,
     pub p95_ns: f64,
+    pub trimmed_p95_ns: f64,
     pub p99_ns: f64,
+    /// In-process steady state: sanitize, route, ledger. No CreateProcess.
+    pub hotpath_p99_ns: f64,
+    /// Verifier process wall time. Not a ratchet gate.
+    pub spawn_p99_ms: f64,
+    pub in_process: bool,
     pub throughput_ops: f64,
     pub hotpath_allocs: u64,
     pub peak_rss_kb: u64,
@@ -259,14 +265,29 @@ pub fn bench_metrics(config: &Config, iters: u32) -> Result<BenchMetrics> {
     }
     let mut app = App::open(app_config)?;
     let mut samples = Vec::with_capacity(iters as usize);
+    let mut hotpath = Vec::with_capacity(iters as usize);
+    let mut spawn = Vec::with_capacity(iters as usize);
     let mut allocs = 0u64;
     let started = Instant::now();
     for i in 0..iters {
         let id = format!("b{i}");
+        let t_hot = Instant::now();
+        let sanitized = sanitize_ticket("fix mobile login");
+        let swarm = route_swarm(&sanitized.technical_objective);
+        app.ledger.record(&format!("h{i}"), swarm, "pass")?;
+        hotpath.push(t_hot.elapsed().as_nanos() as f64);
+
+        let t_spawn = Instant::now();
+        let _ = run_command(
+            &config.verify_program,
+            &config.verify_args,
+            config.verify_timeout,
+        )?;
+        spawn.push(t_spawn.elapsed().as_nanos() as f64);
+
         let t0 = Instant::now();
         let decision = app.admit(&id, "fix mobile login")?;
-        let elapsed = t0.elapsed().as_nanos() as f64;
-        samples.push(elapsed);
+        samples.push(t0.elapsed().as_nanos() as f64);
         if decision.log_line.is_some() {
             allocs = allocs.saturating_add(1);
         }
@@ -279,6 +300,8 @@ pub fn bench_metrics(config: &Config, iters: u32) -> Result<BenchMetrics> {
     }
     let total = started.elapsed().as_secs_f64().max(1e-9);
     samples.sort_by(f64::total_cmp);
+    hotpath.sort_by(f64::total_cmp);
+    spawn.sort_by(f64::total_cmp);
     let per_iter = if iters == 0 {
         0
     } else {
@@ -287,7 +310,11 @@ pub fn bench_metrics(config: &Config, iters: u32) -> Result<BenchMetrics> {
     Ok(BenchMetrics {
         p50_ns: percentile(&samples, 0.50),
         p95_ns: percentile(&samples, 0.95),
+        trimmed_p95_ns: trimmed_percentile(&samples, 0.95, 0.05),
         p99_ns: percentile(&samples, 0.99),
+        hotpath_p99_ns: percentile(&hotpath, 0.99),
+        spawn_p99_ms: percentile(&spawn, 0.99) / 1_000_000.0,
+        in_process: true,
         throughput_ops: f64::from(iters) / total,
         hotpath_allocs: per_iter,
         peak_rss_kb: peak_rss_kb(),
@@ -307,6 +334,15 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     }
     let idx = ((sorted.len() - 1) as f64 * p).round() as usize;
     sorted[idx.min(sorted.len() - 1)]
+}
+
+fn trimmed_percentile(sorted: &[f64], p: f64, trim_hi: f64) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let drop = ((sorted.len() as f64) * trim_hi).floor() as usize;
+    let end = sorted.len().saturating_sub(drop).max(1);
+    percentile(&sorted[..end], p)
 }
 
 fn peak_rss_kb() -> u64 {
