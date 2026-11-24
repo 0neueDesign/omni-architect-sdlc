@@ -2,8 +2,6 @@
 //! `/bin/false`. Windows uses `cmd /c exit`, which is present on every
 //! install and does not open a socket.
 
-use std::path::Path;
-
 pub fn true_program() -> String {
     if cfg!(windows) {
         "cmd".to_string()
@@ -58,31 +56,6 @@ pub fn sleep_args(seconds: &str) -> Vec<String> {
     }
 }
 
-/// Count established-or-any TCP rows the process can see, without opening one.
-pub fn tcp_rows() -> usize {
-    if cfg!(windows) {
-        return tcp_rows_windows();
-    }
-    let text = std::fs::read_to_string("/proc/self/net/tcp").unwrap_or_default();
-    text.lines()
-        .skip(1)
-        .filter(|line| !line.trim().is_empty())
-        .count()
-}
-
-fn tcp_rows_windows() -> usize {
-    let Ok(out) = std::process::Command::new("netstat")
-        .args(["-n", "-p", "tcp"])
-        .output()
-    else {
-        return 0;
-    };
-    let text = String::from_utf8_lossy(&out.stdout);
-    text.lines()
-        .filter(|line| line.contains("TCP"))
-        .count()
-}
-
 pub fn peak_rss_kb() -> u64 {
     if cfg!(windows) {
         return peak_rss_windows();
@@ -134,8 +107,4 @@ fn peak_rss_windows() -> u64 {
     let mem = parts[4..].join(",");
     let digits: String = mem.chars().filter(|c| c.is_ascii_digit()).collect();
     digits.parse::<u64>().unwrap_or(0)
-}
-
-pub fn exe_is_file(path: &Path) -> bool {
-    path.is_file()
 }
