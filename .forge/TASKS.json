@@ -37,7 +37,7 @@
       "seam_target": "verify",
       "max_tokens": 80000,
       "depends_on": ["oa-s1-verify"],
-      "done_when": "FORGE_DST_SEED=0..16 is locked and passes with zero external sockets. Required because this repo has network and state-machine I/O."
+      "done_when": "FORGE_DST_SEED=0..32 is locked and passes with zero external sockets. Required because this repo has network and state-machine I/O."
     }
   ]
 }

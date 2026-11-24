@@ -64,7 +64,9 @@ fn tcp_lines() -> usize {
         let text = String::from_utf8_lossy(&out.stdout);
         return text
             .lines()
-            .filter(|line| line.contains("TCP") && line.split_whitespace().last() == Some(pid.as_str()))
+            .filter(|line| {
+                line.contains("TCP") && line.split_whitespace().last() == Some(pid.as_str())
+            })
             .count();
     }
     let text = std::fs::read_to_string("/proc/self/net/tcp").unwrap_or_default();

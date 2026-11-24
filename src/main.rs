@@ -83,9 +83,12 @@ fn main() -> Result<()> {
             if program.is_empty() {
                 anyhow::bail!("verifier program is unset");
             }
-            let args = if arg.is_empty() { config.verify_args.clone() } else { arg };
-            let report =
-                omni_architect::run_command(&program, &args, config.verify_timeout)?;
+            let args = if arg.is_empty() {
+                config.verify_args.clone()
+            } else {
+                arg
+            };
+            let report = omni_architect::run_command(&program, &args, config.verify_timeout)?;
             println!("{}", serde_json::to_string(&report)?);
             if report.status == omni_architect::CiStatus::Fail {
                 std::process::exit(1);
@@ -99,7 +102,11 @@ fn main() -> Result<()> {
             let decision = app.admit(&id, &text)?;
             println!("{}", serde_json::to_string(&decision)?);
         }
-        Cmd::Bench { iters, program, arg } => {
+        Cmd::Bench {
+            iters,
+            program,
+            arg,
+        } => {
             let mut config = config;
             if let Some(program) = program.filter(|p| !p.is_empty()) {
                 config.verify_program = program;

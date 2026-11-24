@@ -66,6 +66,19 @@ DST is now `FORGE_DST_SEED=0..32`. The socket check counts TCP rows owned by the
 - Locked Python oracle: 2, hash `07ee90c13630cd2223bcb29dd193839487cbc2fcbd5751a35a18e0aafd4b7bef`
 - `forge-harness oracle-verify`: VERIFIED
 
+## Windows tournament (2026-11-24)
+
+Host: Windows 11, AMD Ryzen 5 5600G, 6 physical / 12 logical. Pinned with `forge-harness bench --affinity 0x0F` after a 10-iteration warmup. Measured tree is `rewrite/native-prod` after the dead-`netstat` deletion. 30 iterations, not 200. `hotpath_allocs` is still the three instrumented sites.
+
+| Run | p50_ns | p99_ns | throughput_ops | peak_rss_kb | binary_kb | crates | unsafe |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| pinned 1 | 28942100 | 31067400 | 34.54 | 8236 | 2611 | 60 | 0 |
+| pinned 2 | 28851300 | 34318500 | 34.42 | 8232 | 2611 | 60 | 0 |
+
+The two 30-iteration p99 samples differ by about 10%. That is larger than the 2% Git-Ratchet keep bar. Do not treat the drop versus the 2026-11-23 200-iteration samples (49965900 ns and 54469400 ns) as a code win. The timed path still spawns `cmd /c exit 0`. The deletion does not touch it. `Cargo.lock` has 60 `[[package]]` rows. An earlier note of 58 does not match this lock. The lock was not edited in this pass.
+
+Seat A and seat C produced the same 31-line deletion. Seat B did not finish. No OSS crate was swapped in this pass. `rusqlite` 0.41.1 stays.
+
 ## Subtractive critique
 
 `.forge/CRITIQUE_REPORT.md`. Deleted `Ledger::get` (no caller) and a redundant `db_path` clone. 14 deletions, 35 insertions in `7cac52d`, most of the insertions are the critique and swap notes. No test was removed.

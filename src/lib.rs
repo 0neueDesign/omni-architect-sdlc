@@ -64,12 +64,12 @@ impl Config {
             .or_else(|| std::env::var("OMNI_DB").ok().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("omni.db"));
         let mut config = Self::resolve(cli_key, env_key.as_deref(), file_key.as_deref(), db_path)?;
-        if let Ok(program) = std::env::var("OMNI_VERIFY_PROGRAM") {
-            if !program.is_empty() {
-                config.verify_program = program;
-                if let Ok(args) = std::env::var("OMNI_VERIFY_ARGS") {
-                    config.verify_args = split_verify_args(&args);
-                }
+        if let Ok(program) = std::env::var("OMNI_VERIFY_PROGRAM")
+            && !program.is_empty()
+        {
+            config.verify_program = program;
+            if let Ok(args) = std::env::var("OMNI_VERIFY_ARGS") {
+                config.verify_args = split_verify_args(&args);
             }
         }
         Ok(config)
@@ -148,10 +148,6 @@ impl Admission {
 
     pub fn stop(&mut self) {
         self.stopped = true;
-    }
-
-    pub fn is_stopped(&self) -> bool {
-        self.stopped
     }
 
     pub fn try_enter(&mut self) -> Result<()> {

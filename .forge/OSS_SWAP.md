@@ -1,6 +1,6 @@
 # OSS swap decisions
 
-`cargo-deny` is not installed. No CVE audit is claimed. Licenses below are the crate metadata, not a deny-gate result.
+`cargo deny check advisories` and `cargo deny check licenses` pass on this tree with `cargo-deny` 0.22.0. `deny.toml` is in the repo. The Windows note below is the swap that cleared `RUSTSEC-2026-0459`.
 
 | Seam | Choice | Kept? | Why |
 |---|---|---|---|
